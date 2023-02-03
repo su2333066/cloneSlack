@@ -1,17 +1,21 @@
 import useInput from '@hooks/useInput';
 import axios from 'axios';
 import React, { useCallback, useState, VFC } from 'react';
-import { Link } from 'react-router-dom';
+import useSWR from 'swr';
+import fetcher from '@utils/fetcher';
+import { Link, Redirect } from 'react-router-dom';
 import { Form, Success, Error, Label, Input, LinkContainer, Button, Header } from './styles';
 
 const SignUp = () => {
-  const [signUpError, setSignUpError] = useState('');
-  const [signUpSuccess, setSignUpSuccess] = useState(false);
-  const [mismatchError, setMismatchError] = useState(false);
+  const { data, error, revalidate } = useSWR('http://localhost:3095/api/users', fetcher);
+
   const [email, onChangeEmail] = useInput('');
   const [nickname, onChangeNickname] = useInput('');
   const [password, setPassword] = useState('');
   const [passwordCheck, setPasswordCheck] = useState('');
+  const [mismatchError, setMismatchError] = useState(false);
+  const [signUpError, setSignUpError] = useState('');
+  const [signUpSuccess, setSignUpSuccess] = useState(false);
 
   const onChangePassword = useCallback(
     (e) => {
@@ -52,6 +56,14 @@ const SignUp = () => {
     },
     [email, nickname, password, passwordCheck, mismatchError],
   );
+
+  if (data === undefined) {
+    return <div>로딩중...</div>;
+  }
+
+  if (data) {
+    return <Redirect to="/workspace/channel" />;
+  }
 
   return (
     <div id="container">
