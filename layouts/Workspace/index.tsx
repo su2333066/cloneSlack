@@ -183,7 +183,7 @@ const Workspace = () => {
               </WorkspaceModal>
             </Menu>
             <ChannelList />
-            <DMList userData={userData} />
+            <DMList />
           </MenuScroll>
         </Channels>
         <Chats>
