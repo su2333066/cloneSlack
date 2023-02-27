@@ -1,25 +1,11 @@
 import ChannelList from '@components/ChannelList';
-import CreateChannelModal from '@components/CreateChanneModal';
 import DMList from '@components/DMList';
+import InviteChannelModal from '@components/InviteChannelModal';
 import InviteWorkspaceModal from '@components/InviteWorkspaceModal';
 import Menu from '@components/Menu';
 import Modal from '@components/Modal';
 import useInput from '@hooks/useInput';
 // import useSocket from '@hooks/useSocket';
-import Channel from '@pages/Channel';
-import DirectMessage from '@pages/DirectMessage';
-import { Button, Input, Label } from '@pages/SignUp/styles';
-import { IChannel, IUser } from '@typings/db';
-import fetcher from '@utils/fetcher';
-import axios from 'axios';
-import gravatar from 'gravatar';
-import React, { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'react-router';
-import { Link, Redirect, Route, Switch } from 'react-router-dom';
-import { toast, ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import useSWR from 'swr';
-
 import {
   AddButton,
   Channels,
@@ -35,53 +21,88 @@ import {
   WorkspaceName,
   Workspaces,
   WorkspaceWrapper,
-} from './styles';
+} from '@layouts/Workspace/styles';
+import loadable from '@loadable/component';
+import { Button, Input, Label } from '@pages/SignUp/styles';
+import { IChannel, IUser } from '@typings/db';
+import fetcher from '@utils/fetcher';
+import axios from 'axios';
+import React, { VFC, useCallback, useState, useEffect } from 'react';
+import { Redirect, useParams } from 'react-router';
+import { Link, Route, Switch } from 'react-router-dom';
+import useSWR, { mutate } from 'swr';
+import gravatar from 'gravatar';
+import { toast } from 'react-toastify';
+import CreateChannelModal from '@components/CreateChanneModal';
+
+const Channel = loadable(() => import('@pages/Channel'));
+const DirectMessage = loadable(() => import('@pages/DirectMessage'));
 
 const Workspace = () => {
-  const params = useParams<{ workspace?: string }>();
-  // console.log('params', params, 'location', location, 'routeMatch', routeMatch, 'history', history);
-  const { workspace } = params;
-  // const [socket, disconnectSocket] = useSocket(workspace);
-  const { data: userData, mutate: revalidateUser } = useSWR<IUser | false>('/api/users', fetcher);
-  const { data: channelData } = useSWR<IChannel[]>(userData ? `/api/workspaces/${workspace}/channels` : null, fetcher);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [showCreateWorkspaceModal, setShowCreateWorkspaceModal] = useState(false);
   const [showInviteWorkspaceModal, setShowInviteWorkspaceModal] = useState(false);
-  const [showCreateChannelModal, setShowCreateChannelModal] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showInviteChannelModal, setShowInviteChannelModal] = useState(false);
   const [showWorkspaceModal, setShowWorkspaceModal] = useState(false);
-  const [newWorkspace, onChangeNewWorkspace, setNewWorkspace] = useInput('');
+  const [showCreateChannelModal, setShowCreateChannelModal] = useState(false);
+  const [newWorkspace, onChangeNewWorkspace, setNewWorkpsace] = useInput('');
   const [newUrl, onChangeNewUrl, setNewUrl] = useInput('');
+
+  const { workspace } = useParams<{ workspace: string }>();
+  const {
+    data: userData,
+    error,
+    revalidate,
+    mutate,
+  } = useSWR<IUser | false>('/api/users', fetcher, {
+    dedupingInterval: 2000, // 2초
+  });
+  const { data: channelData } = useSWR<IChannel[]>(userData ? `/api/workspaces/${workspace}/channels` : null, fetcher);
+  const { data: memberData } = useSWR<IUser[]>(userData ? `/api/workspaces/${workspace}/members` : null, fetcher);
+  // const [socket, disconnect] = useSocket(workspace);
+
+  // useEffect(() => {
+  //   if (channelData && userData && socket) {
+  //     console.log(socket);
+  //     socket.emit('login', { id: userData.id, channels: channelData.map((v) => v.id) });
+  //   }
+  // }, [socket, channelData, userData]);
+  // useEffect(() => {
+  //   return () => {
+  //     disconnect();
+  //   };
+  // }, [workspace, disconnect]);
 
   const onLogOut = useCallback(() => {
     axios
-      .post('/api/users/logout')
-      .then(() => {
-        revalidateUser();
+      .post('/api/users/logout', null, {
+        withCredentials: true,
       })
-      .catch((error) => {
-        console.dir(error);
-        toast.error(error.response?.data, { position: 'bottom-center' });
+      .then(() => {
+        mutate(false, false);
       });
   }, []);
 
   const onCreateWorkspace = useCallback(
     (e) => {
       e.preventDefault();
-      if (!newWorkspace || !newWorkspace.trim()) {
-        return;
-      }
-      if (!newUrl || !newUrl.trim()) {
-        return;
-      }
+      if (!newWorkspace || !newWorkspace.trim()) return;
+      if (!newUrl || !newUrl.trim()) return;
       axios
-        .post('/api/workspaces', {
-          workspace: newWorkspace,
-          url: newUrl,
-        })
+        .post(
+          '/api/workspaces',
+          {
+            workspace: newWorkspace,
+            url: newUrl,
+          },
+          {
+            withCredentials: true,
+          },
+        )
         .then(() => {
-          revalidateUser();
+          revalidate();
           setShowCreateWorkspaceModal(false);
-          setNewWorkspace('');
+          setNewWorkpsace('');
           setNewUrl('');
         })
         .catch((error) => {
@@ -108,6 +129,7 @@ const Workspace = () => {
     setShowCreateWorkspaceModal(false);
     setShowCreateChannelModal(false);
     setShowInviteWorkspaceModal(false);
+    setShowInviteChannelModal(false);
   }, []);
 
   const onClickUserProfile = useCallback(() => {
@@ -117,19 +139,6 @@ const Workspace = () => {
   const toggleWorkspaceModal = useCallback(() => {
     setShowWorkspaceModal((prev) => !prev);
   }, []);
-
-  // useEffect(() => {
-  //   return () => {
-  //     console.info('disconnect socket', workspace);
-  //     disconnectSocket();
-  //   };
-  // }, [disconnectSocket, workspace]);
-  // useEffect(() => {
-  //   if (channelData && userData) {
-  //     console.info('로그인하자', socket);
-  //     socket?.emit('login', { id: userData?.id, channels: channelData.map((v) => v.id) });
-  //   }
-  // }, [socket, userData, channelData]);
 
   if (userData === false) {
     return <Redirect to="/login" />;
@@ -216,7 +225,6 @@ const Workspace = () => {
         onCloseModal={onCloseModal}
         setShowInviteWorkspaceModal={setShowInviteWorkspaceModal}
       />
-      <ToastContainer position="bottom-center" />
     </div>
   );
 };
